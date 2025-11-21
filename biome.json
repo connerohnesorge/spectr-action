@@ -16,8 +16,7 @@
       "!**/dist",
       "!**/lib",
       "!**/node_modules",
-      "!**/package*.json",
-      "!**/known-checksums.*"
+      "!**/package*.json"
     ]
   },
   "formatter": {
