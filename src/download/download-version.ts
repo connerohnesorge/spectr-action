@@ -119,7 +119,11 @@ export async function resolveVersion(
       : versionInput;
   if (tc.isExplicitVersion(version)) {
     core.debug(`Version ${version} is an explicit version.`);
-    return version;
+    const normalizedVersion = version.startsWith("v") ? version : `v${version}`;
+    if (normalizedVersion !== version) {
+      core.debug(`Normalized explicit version to ${normalizedVersion}`);
+    }
+    return normalizedVersion;
   }
   const availableVersions = await getAvailableVersions(githubToken);
   const resolvedVersion = maxSatisfying(availableVersions, version);
@@ -155,12 +159,6 @@ async function getReleaseTagNames(
     owner: OWNER,
     repo: REPO,
   });
-  const releaseTagNames = response.map((release) => release.tag_name);
-  if (releaseTagNames.length === 0) {
-    throw Error(
-      "Github API request failed while getting releases. Check the GitHub status page for outages. Try again later.",
-    );
-  }
   return response.map((release) => release.tag_name);
 }
 
@@ -178,7 +176,17 @@ async function getLatestVersion(githubToken: string) {
         "No (valid) GitHub token provided. Falling back to anonymous. Requests might be rate limited.",
       );
       const octokit = new PaginatingOctokit();
-      latestRelease = await getLatestRelease(octokit);
+      try {
+        latestRelease = await getLatestRelease(octokit);
+      } catch (anonErr) {
+        // If latest release fails anonymously, try to get all releases
+        core.debug("Failed to get latest release, trying all releases...");
+        return await getLatestVersionFromAllReleases(octokit);
+      }
+    } else if ((err as Error).message.includes("Not Found")) {
+      // No "latest" release found, try to get all releases and use the most recent
+      core.debug("No latest release found, checking all releases...");
+      return await getLatestVersionFromAllReleases(octokit);
     } else {
       core.error(
         "Github API request failed while getting latest release. Check the GitHub status page for outages. Try again later.",
@@ -191,6 +199,29 @@ async function getLatestVersion(githubToken: string) {
     throw new Error("Could not determine latest release.");
   }
   return latestRelease.tag_name;
+}
+
+async function getLatestVersionFromAllReleases(
+  octokit: InstanceType<typeof PaginatingOctokit>,
+): Promise<string> {
+  try {
+    const releases = await getReleaseTagNames(octokit);
+    if (releases.length === 0) {
+      throw new Error(
+        `No releases found in ${OWNER}/${REPO}. Please create a release before using 'latest' version. Visit: https://github.com/${OWNER}/${REPO}/releases/new`,
+      );
+    }
+    // Return the first release (most recent)
+    core.info(`Using most recent release: ${releases[0]}`);
+    return releases[0];
+  } catch (err) {
+    if ((err as Error).message.includes("No releases found")) {
+      throw err;
+    }
+    throw new Error(
+      `Failed to fetch releases from ${OWNER}/${REPO}: ${(err as Error).message}`,
+    );
+  }
 }
 
 async function getLatestRelease(

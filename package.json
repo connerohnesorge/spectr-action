@@ -9,9 +9,12 @@
     "check": "biome check --write",
     "package": "ncc build -o dist/spectr-action src/spectr-action.ts",
     "act": "act pull_request -W .github/workflows/test.yml --container-architecture linux/amd64 -s GITHUB_TOKEN=\"$(gh auth token)\"",
-    "test": "tsx --test '__tests__/**/*.test.ts'",
-    "test:watch": "tsx --test --watch '__tests__/**/*.test.ts'",
-    "test:coverage": "node --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage.lcov --test '__tests__/**/*.test.ts'",
+    "test": "node scripts/run-tests.js __tests__/unit/**/*.test.ts",
+    "test:all": "node scripts/run-tests.js",
+    "test:unit": "node scripts/run-tests.js __tests__/unit/**/*.test.ts",
+    "test:integration": "node scripts/run-tests.js __tests__/integration/**/*.test.ts",
+    "test:watch": "tsx --test --watch __tests__/unit/**/*.test.ts",
+    "test:coverage": "node --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage.lcov --test __tests__/unit/**/*.test.ts",
     "all": "npm install && npm run build && npm run check && npm run package"
   },
   "repository": {
@@ -41,6 +44,7 @@
     "@types/node": "^24.10.1",
     "@types/semver": "^7.7.1",
     "@vercel/ncc": "^0.38.4",
+    "glob": "^13.0.0",
     "js-yaml": "^4.1.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"

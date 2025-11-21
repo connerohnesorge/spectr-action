@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import * as path from "node:path";
 import { describe, it } from "node:test";
 import type {
   ValidationIssue,
@@ -102,9 +103,14 @@ function processValidationOutput(
 
     // Create annotations for each issue
     for (const issue of report.issues) {
-      const relativePath = issue.path.startsWith(workspacePath)
-        ? issue.path.slice(workspacePath.length + 1)
-        : issue.path;
+      const [rawPath] = issue.path.split(/:(?:\s|$)/);
+      const workspaceRoot = path.resolve(workspacePath);
+      const absolutePath = path.isAbsolute(rawPath)
+        ? rawPath
+        : path.resolve(workspaceRoot, rawPath);
+      const relativePath = path
+        .relative(workspaceRoot, absolutePath)
+        .replace(/\\\\/g, "/");
 
       const annotationProps: AnnotationProps = {
         file: relativePath,
@@ -611,6 +617,36 @@ describe("Validation Output Processing", () => {
         result.annotations[0].props.file,
         "spectr/changes/test/spec.md",
       );
+    });
+
+    it("should strip descriptive suffixes from issue paths", () => {
+      const output: ValidationOutput = [
+        {
+          name: "auth-spec",
+          report: {
+            issues: [
+              createIssue(
+                "ERROR",
+                "/home/user/workspace/spectr/specs/auth/spec.md: Requirement 'Login'",
+                "Missing scenario",
+                12,
+              ),
+            ],
+            summary: { errors: 1, info: 0, warnings: 0 },
+            valid: false,
+          },
+          type: "spec",
+          valid: false,
+        },
+      ];
+
+      const result = processValidationOutput(output, "/home/user/workspace");
+
+      assert.equal(
+        result.annotations[0].props.file,
+        "spectr/specs/auth/spec.md",
+      );
+      assert.equal(result.annotations[0].props.startLine, 12);
     });
 
     it("should handle paths that do not start with workspace", () => {

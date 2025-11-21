@@ -214,7 +214,14 @@ async function processValidationResults(
 
     // Create annotations for each issue
     for (const issue of report.issues) {
-      const relativePath = path.relative(workspacePath, issue.path);
+      const rawPath = issue.path.split(/:(?:\s|$)/)[0];
+      const workspaceRoot = path.resolve(workspacePath);
+      const absolutePath = path.isAbsolute(rawPath)
+        ? rawPath
+        : path.resolve(workspaceRoot, rawPath);
+      const relativePath = path
+        .relative(workspaceRoot, absolutePath)
+        .replace(/\\\\/g, "/");
       const annotationTitle = itemTitle;
 
       const annotationProps = {

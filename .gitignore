@@ -100,3 +100,5 @@ lib/**/*
 
 # Idea IDEs (PyCharm, WebStorm, IntelliJ, etc)
 .idea/
+.direnv
+result

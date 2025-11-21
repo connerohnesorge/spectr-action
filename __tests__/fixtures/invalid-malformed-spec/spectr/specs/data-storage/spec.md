@@ -16,6 +16,7 @@ The system SHALL persist all user data to a durable storage backend.
 - **AND** a success confirmation is returned
 
 **Scenario**: Load operation successful
+
 - **WHEN** a user requests their saved data
 - **THEN** the previously saved data is retrieved
 - **AND** returned to the user
@@ -25,6 +26,7 @@ The system SHALL persist all user data to a durable storage backend.
 The system MUST ensure data integrity through validation and checksums.
 
 ### Scenario: Data validation on write
+
 - **WHEN** data is written to storage
 - **THEN** validation checks are performed
 - **AND** checksums are calculated and stored
@@ -39,6 +41,7 @@ The system MUST ensure data integrity through validation and checksums.
 The system SHALL handle concurrent read and write operations safely.
 
 **Scenario: Multiple readers**
+
 - **WHEN** multiple users read the same data simultaneously
 - **THEN** all readers receive consistent data
 - **AND** no read operation blocks others
