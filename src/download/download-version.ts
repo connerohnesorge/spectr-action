@@ -159,12 +159,6 @@ async function getReleaseTagNames(
     owner: OWNER,
     repo: REPO,
   });
-  const releaseTagNames = response.map((release) => release.tag_name);
-  if (releaseTagNames.length === 0) {
-    throw Error(
-      "Github API request failed while getting releases. Check the GitHub status page for outages. Try again later.",
-    );
-  }
   return response.map((release) => release.tag_name);
 }
 
