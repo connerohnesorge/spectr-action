@@ -119,9 +119,7 @@ export async function resolveVersion(
       : versionInput;
   if (tc.isExplicitVersion(version)) {
     core.debug(`Version ${version} is an explicit version.`);
-    const normalizedVersion = version.startsWith("v")
-      ? version
-      : `v${version}`;
+    const normalizedVersion = version.startsWith("v") ? version : `v${version}`;
     if (normalizedVersion !== version) {
       core.debug(`Normalized explicit version to ${normalizedVersion}`);
     }

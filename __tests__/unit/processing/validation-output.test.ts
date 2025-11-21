@@ -642,7 +642,10 @@ describe("Validation Output Processing", () => {
 
       const result = processValidationOutput(output, "/home/user/workspace");
 
-      assert.equal(result.annotations[0].props.file, "spectr/specs/auth/spec.md");
+      assert.equal(
+        result.annotations[0].props.file,
+        "spectr/specs/auth/spec.md",
+      );
       assert.equal(result.annotations[0].props.startLine, 12);
     });
 

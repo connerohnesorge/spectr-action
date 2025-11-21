@@ -1,4 +1,5 @@
 # spectr-action
+
 A GitHub Action to run Spectr
 
 [![CI](https://github.com/connerohnesorge/spectr/actions/workflows/test.yml/badge.svg)](https://github.com/connerohnesorge/spectr/actions/workflows/test.yml)
@@ -16,6 +17,7 @@ This action automatically validates your specification-driven codebase by runnin
 ### What does this action do?
 
 This action:
+
 - Installs the specified version of Spectr (or latest)
 - Runs comprehensive validation on your `spectr/` directory
 - Creates GitHub annotations for any errors, warnings, or info messages
@@ -25,6 +27,7 @@ This action:
 ### When to use this action
 
 Use this action as part of your CI/CD pipeline for projects that follow spec-driven development:
+
 - On every pull request to validate proposed changes
 - On push to main/master to ensure spec integrity
 - As a required status check before merging
@@ -51,16 +54,19 @@ That's it! The action will use the latest version of Spectr and run in strict mo
 ## Inputs
 
 ### `version`
+
 **Description:** The version of Spectr to use (e.g., `0.1.0`).
 **Required:** No
 **Default:** `latest`
 
 ### `github-token`
+
 **Description:** GitHub token used to increase rate limits when retrieving versions and downloading Spectr. Uses the default GitHub Actions token automatically.
 **Required:** No
 **Default:** `${{ github.token }}`
 
 ### `strict`
+
 **Description:** Treat warnings as errors (enables `--strict` mode). Set to `false` to allow warnings without failing the build.
 **Required:** No
 **Default:** `true`
@@ -68,9 +74,11 @@ That's it! The action will use the latest version of Spectr and run in strict mo
 ## Outputs
 
 ### `spectr-version`
+
 **Description:** The version of Spectr that was installed and used for validation.
 
 **Example usage:**
+
 ```yaml
 - uses: connerohnesorge/spectr-action@v1
   id: spectr
@@ -87,12 +95,14 @@ The action automatically creates GitHub annotations for all validation issues:
 - **Info** (blue): Informational messages
 
 Each annotation includes:
+
 - File path relative to repository root
 - Line number where the issue occurs
 - Clear description of the problem
 - Suggested fixes (when applicable)
 
 Annotations appear:
+
 - In the workflow run logs
 - On the "Files changed" tab in pull requests
 - In the GitHub UI wherever the file is displayed
@@ -295,7 +305,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for better analysis
+          fetch-depth: 0 # Full history for better analysis
 
       - name: Run Spectr validation
         uses: connerohnesorge/spectr-action@v1
@@ -377,6 +387,7 @@ Warnings:
 **Problem:** The action can't find or download Spectr.
 
 **Solutions:**
+
 1. Check if the specified version exists
 2. Verify network connectivity to GitHub releases
 3. Try specifying `version: "latest"`
@@ -394,6 +405,7 @@ Warnings:
 **Problem:** Environment variables not set correctly.
 
 **Solutions:**
+
 1. Ensure you're using `actions/checkout@v4` before this action
 2. Verify you're running on a supported runner (ubuntu-latest, macos-latest, windows-latest)
 3. Check that the workflow has proper permissions
@@ -403,7 +415,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4  # Required!
+      - uses: actions/checkout@v4 # Required!
       - uses: connerohnesorge/spectr-action@v1
 ```
 
@@ -412,14 +424,15 @@ jobs:
 **Problem:** Spectr output format changed or is invalid.
 
 **Solutions:**
+
 1. Update to the latest action version
 2. Check the spectr version compatibility
 3. Run `spectr validate --all --strict --json` locally to debug
 
 ```yaml
-- uses: connerohnesorge/spectr-action@v1  # Uses latest action
+- uses: connerohnesorge/spectr-action@v1 # Uses latest action
   with:
-    version: "0.1.0"  # Use known good spectr version
+    version: "0.1.0" # Use known good spectr version
 ```
 
 ### "No specs found" or Directory Structure Issues
@@ -427,6 +440,7 @@ jobs:
 **Problem:** The action can't find your `spectr/` directory.
 
 **Solutions:**
+
 1. Verify `spectr/` directory exists in repository root
 2. Ensure you've checked out the repository with `actions/checkout@v4`
 3. Check that `spectr/` contains proper structure:
@@ -435,6 +449,7 @@ jobs:
    - `spectr/project.md` for project configuration
 
 Expected structure:
+
 ```
 repository-root/
 ├── .github/
@@ -457,6 +472,7 @@ repository-root/
 **Problem:** The action reports errors on specs that appear correct.
 
 **Solutions:**
+
 1. Run `spectr validate --all --strict` locally to see detailed output
 2. Check for invisible characters or formatting issues
 3. Verify spec format follows Spectr conventions (see Spectr documentation)
@@ -467,6 +483,7 @@ repository-root/
 **Problem:** The action takes a long time to complete.
 
 **Solutions:**
+
 1. Pin to a specific Spectr version instead of using `latest` (caches better)
 2. Reduce the number of specs/changes being validated
 3. Split validation across multiple jobs if you have many specs
@@ -474,7 +491,7 @@ repository-root/
 ```yaml
 - uses: connerohnesorge/spectr-action@v1
   with:
-    version: "0.1.0"  # Cached after first download
+    version: "0.1.0" # Cached after first download
 ```
 
 ## Project Requirements
@@ -490,6 +507,7 @@ For this action to work properly, your project must:
 4. **Use the `actions/checkout` action** before spectr-action
 
 Minimal valid structure:
+
 ```
 repository-root/
 ├── spectr/
