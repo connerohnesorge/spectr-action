@@ -43,7 +43,7 @@ jobs:
           git diff --exit-code || (echo "::error::Please run 'npm run build' and commit the changes" && exit 1)
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dist
           path: dist/
