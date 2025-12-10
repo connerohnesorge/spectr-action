@@ -71,11 +71,63 @@ That's it! The action will use the latest version of Spectr and run in strict mo
 **Required:** No
 **Default:** `true`
 
+### `sync-issues`
+
+**Description:** Enable GitHub Issues sync for change proposals. When enabled, creates GitHub Issues for each active change proposal and keeps them synchronized.
+**Required:** No
+**Default:** `false`
+
+### `issue-labels`
+
+**Description:** Comma-separated labels to apply to synced issues.
+**Required:** No
+**Default:** `spectr,change-proposal`
+
+### `issue-title-prefix`
+
+**Description:** Prefix for issue titles.
+**Required:** No
+**Default:** `[Spectr Change]`
+
+### `close-on-archive`
+
+**Description:** Close issues when changes are archived. Set to `false` to keep issues open when the associated change is archived.
+**Required:** No
+**Default:** `true`
+
+### `update-existing`
+
+**Description:** Update existing issues when proposal content changes. Set to `false` to skip updates.
+**Required:** No
+**Default:** `true`
+
+### `spectr-label`
+
+**Description:** Label used to identify Spectr-managed issues.
+**Required:** No
+**Default:** `spectr-managed`
+
 ## Outputs
 
 ### `spectr-version`
 
 **Description:** The version of Spectr that was installed and used for validation.
+
+### `issues-created`
+
+**Description:** Number of GitHub Issues created during sync (only when `sync-issues` is enabled).
+
+### `issues-updated`
+
+**Description:** Number of GitHub Issues updated during sync (only when `sync-issues` is enabled).
+
+### `issues-closed`
+
+**Description:** Number of GitHub Issues closed during sync (archived changes, only when `sync-issues` is enabled).
+
+### `total-changes`
+
+**Description:** Total number of active change proposals discovered (only when `sync-issues` is enabled).
 
 **Example usage:**
 
@@ -278,6 +330,43 @@ jobs:
         run: echo "Validation passed, ready to merge!"
 ```
 
+### Example 8: Issue Sync
+
+Enable automatic GitHub Issues sync for change proposals:
+
+```yaml
+name: Spectr Validation with Issue Sync
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  checks: write
+  issues: write  # Required for issue sync
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: connerohnesorge/spectr-action@v1
+        id: spectr
+        with:
+          sync-issues: "true"
+          issue-labels: "spectr,change-proposal,tracking"
+          issue-title-prefix: "[Change Proposal]"
+
+      - name: Report sync results
+        if: always()
+        run: |
+          echo "Issues created: ${{ steps.spectr.outputs.issues-created }}"
+          echo "Issues updated: ${{ steps.spectr.outputs.issues-updated }}"
+          echo "Issues closed: ${{ steps.spectr.outputs.issues-closed }}"
+          echo "Total changes: ${{ steps.spectr.outputs.total-changes }}"
+```
+
 ### Real-World Example
 
 A complete production workflow showing best practices:
@@ -327,6 +416,57 @@ jobs:
             exit 1
           fi
 ```
+
+## Issue Sync Feature
+
+The issue sync feature automatically creates and maintains GitHub Issues for your change proposals. This provides better visibility, enables discussion via issue comments, and integrates with GitHub's existing PR linking (`Fixes #N`).
+
+### How It Works
+
+1. **Discovery**: Scans `spectr/changes/` for active proposals with `proposal.md`
+2. **Creation**: Creates a GitHub Issue for each new change proposal
+3. **Tracking**: Uses a hidden HTML marker (`<!-- spectr-change-id:ID -->`) to link issues to changes
+4. **Updates**: Syncs content changes when `proposal.md` or `tasks.md` is modified
+5. **Closure**: Closes issues when changes are archived to `spectr/changes/archive/`
+
+### Required Permissions
+
+When using issue sync, your workflow needs the `issues: write` permission:
+
+```yaml
+permissions:
+  contents: read
+  issues: write
+```
+
+### Issue Content
+
+Each synced issue includes:
+- The full content of `proposal.md`
+- List of affected specs (from the `specs/` subdirectory)
+- Tasks from `tasks.md` or `tasks.json` (if present)
+- A footer indicating the issue is managed by Spectr
+
+### Labels
+
+By default, issues are created with these labels:
+- `spectr` - Indicates Spectr-related content
+- `change-proposal` - Marks it as a change proposal
+- `spectr-managed` - Used internally to identify managed issues
+
+You can customize labels using the `issue-labels` and `spectr-label` inputs.
+
+### Linking PRs to Issues
+
+Once issues are created, you can link PRs to them using GitHub's standard syntax:
+
+```
+Fixes #123
+Closes #123
+Resolves #123
+```
+
+This will automatically close the issue when the PR is merged.
 
 ## Understanding Output
 
