@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   CHANGE_ID_MARKER_PATTERN,
-  MAX_ISSUE_BODY_LENGTH,
   extractChangeIdFromBody,
   generateChangeIdMarker,
+  MAX_ISSUE_BODY_LENGTH,
 } from "../../../src/issues/types";
 
 describe("types.ts", () => {

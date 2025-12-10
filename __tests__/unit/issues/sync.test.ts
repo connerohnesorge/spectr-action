@@ -57,25 +57,25 @@ describe("sync.ts", () => {
       // Create a mock Octokit that returns a mix of issues and PRs
       const mockIssues = [
         {
-          number: 1,
-          title: "Issue 1",
           body: "<!-- spectr-change-id:change-1 -->\nContent",
-          state: "open",
+          number: 1,
           pull_request: undefined,
+          state: "open",
+          title: "Issue 1",
         },
         {
-          number: 2,
-          title: "PR 1",
           body: "<!-- spectr-change-id:change-2 -->\nContent",
-          state: "open",
+          number: 2,
           pull_request: { url: "https://github.com/..." },
+          state: "open",
+          title: "PR 1",
         },
         {
-          number: 3,
-          title: "Issue 2",
           body: "<!-- spectr-change-id:change-3 -->\nContent",
-          state: "closed",
+          number: 3,
           pull_request: undefined,
+          state: "closed",
+          title: "Issue 2",
         },
       ];
 
@@ -109,10 +109,10 @@ describe("sync.ts", () => {
     it("should extract change IDs from issue bodies", async () => {
       const mockIssues = [
         {
-          number: 10,
-          title: "[Spectr Change] add-feature",
           body: "<!-- spectr-change-id:add-feature -->\n\n## Proposal\nContent here",
+          number: 10,
           state: "open",
+          title: "[Spectr Change] add-feature",
         },
       ];
 
@@ -142,16 +142,16 @@ describe("sync.ts", () => {
     it("should skip issues without change ID marker", async () => {
       const mockIssues = [
         {
-          number: 1,
-          title: "Regular issue",
           body: "No marker here",
+          number: 1,
           state: "open",
+          title: "Regular issue",
         },
         {
-          number: 2,
-          title: "[Spectr Change] with-marker",
           body: "<!-- spectr-change-id:with-marker -->\nContent",
+          number: 2,
           state: "open",
+          title: "[Spectr Change] with-marker",
         },
       ];
 
@@ -257,14 +257,14 @@ describe("sync.ts", () => {
       const mockOctokit = {
         rest: {
           issues: {
+            createComment: async () => {
+              commentCalled = true;
+              return { data: {} };
+            },
             update: async (params: any) => {
               updateCalled = true;
               assert.equal(params.state, "closed");
               assert.equal(params.state_reason, "completed");
-              return { data: {} };
-            },
-            createComment: async () => {
-              commentCalled = true;
               return { data: {} };
             },
           },
@@ -286,13 +286,13 @@ describe("sync.ts", () => {
       const mockOctokit = {
         rest: {
           issues: {
-            update: async (params: any) => {
-              callOrder.push("update");
-              return { data: {} };
-            },
             createComment: async (params: any) => {
               callOrder.push("comment");
               assert.equal(params.body, "Closing comment");
+              return { data: {} };
+            },
+            update: async (params: any) => {
+              callOrder.push("update");
               return { data: {} };
             },
           },
@@ -339,11 +339,11 @@ describe("sync.ts", () => {
         paginate: async () => [{ name: "existing-label" }],
         rest: {
           issues: {
-            listLabelsForRepo: {},
             createLabel: async (params: any) => {
               createdLabels.push(params.name);
               return { data: {} };
             },
+            listLabelsForRepo: {},
           },
         },
       } as any;
@@ -369,11 +369,11 @@ describe("sync.ts", () => {
         paginate: async () => [{ name: "spectr" }, { name: "spectr-managed" }],
         rest: {
           issues: {
-            listLabelsForRepo: {},
             createLabel: async (params: any) => {
               createdLabels.push(params.name);
               return { data: {} };
             },
+            listLabelsForRepo: {},
           },
         },
       } as any;
@@ -397,12 +397,12 @@ describe("sync.ts", () => {
         paginate: async () => [],
         rest: {
           issues: {
-            listLabelsForRepo: {},
             createLabel: async () => {
               const error = new Error("Validation Failed") as any;
               error.status = 422;
               throw error;
             },
+            listLabelsForRepo: {},
           },
         },
       } as any;
@@ -424,12 +424,12 @@ describe("sync.ts", () => {
         paginate: async () => [],
         rest: {
           issues: {
-            listLabelsForRepo: {},
             createLabel: async () => {
               const error = new Error("Server Error") as any;
               error.status = 500;
               throw error;
             },
+            listLabelsForRepo: {},
           },
         },
       } as any;

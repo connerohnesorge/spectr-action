@@ -19,7 +19,7 @@ describe("discover.ts", () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(tempDir, { force: true, recursive: true });
   });
 
   function createChange(
@@ -196,21 +196,21 @@ describe("discover.ts", () => {
     it("should read and format tasks.json content", () => {
       const changePath = createChange("with-json-tasks", {
         tasksJson: {
-          version: 1,
           tasks: [
             {
+              description: "First task",
               id: "1.1",
               section: "Setup",
-              description: "First task",
               status: "completed",
             },
             {
+              description: "Second task",
               id: "1.2",
               section: "Setup",
-              description: "Second task",
               status: "pending",
             },
           ],
+          version: 1,
         },
       });
 
