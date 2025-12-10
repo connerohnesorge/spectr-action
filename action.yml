@@ -18,9 +18,51 @@ inputs:
     required: false
     default: "true"
 
+  sync-issues:
+    description: "Enable GitHub Issues sync for change proposals. Set to 'true' to create/update issues."
+    required: false
+    default: "false"
+
+  issue-labels:
+    description: "Comma-separated labels to apply to synced issues."
+    required: false
+    default: "spectr,change-proposal"
+
+  issue-title-prefix:
+    description: "Prefix for issue titles."
+    required: false
+    default: "[Spectr Change]"
+
+  close-on-archive:
+    description: "Close issues when changes are archived. Set to 'false' to keep issues open."
+    required: false
+    default: "true"
+
+  update-existing:
+    description: "Update existing issues when proposal content changes. Set to 'false' to skip updates."
+    required: false
+    default: "true"
+
+  spectr-label:
+    description: "Label used to identify Spectr-managed issues."
+    required: false
+    default: "spectr-managed"
+
 outputs:
   spectr-version:
     description: "The version of Spectr that was installed and used"
+
+  issues-created:
+    description: "Number of GitHub Issues created during sync"
+
+  issues-updated:
+    description: "Number of GitHub Issues updated during sync"
+
+  issues-closed:
+    description: "Number of GitHub Issues closed during sync (archived changes)"
+
+  total-changes:
+    description: "Total number of active change proposals discovered"
 
 runs:
   using: "node20"

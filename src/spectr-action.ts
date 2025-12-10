@@ -6,8 +6,10 @@ import {
   resolveVersion,
   tryGetFromToolCache,
 } from "./download/download-version";
+import { syncIssues } from "./issues";
 import type { ValidationOutput } from "./types/spectr";
 import { hasReport } from "./types/spectr";
+import { getIssueSyncConfig } from "./utils/inputs";
 import type { Architecture, Platform } from "./utils/platforms";
 import { getArch, getPlatform } from "./utils/platforms";
 
@@ -44,7 +46,25 @@ async function run(): Promise<void> {
     // 5. Process results and create annotations
     const hasErrors = await processValidationResults(validationOutput);
 
-    // 6. Set action status
+    // 6. Run issue sync if enabled
+    const issueSyncConfig = getIssueSyncConfig();
+    if (issueSyncConfig.enabled) {
+      const workspacePath = process.env.GITHUB_WORKSPACE;
+      if (!workspacePath) {
+        throw new Error("GITHUB_WORKSPACE environment variable is not set");
+      }
+      core.info("");
+      core.info("=== Issue Sync ===");
+      const syncResult = await syncIssues(issueSyncConfig, workspacePath);
+
+      // Set issue sync outputs
+      core.setOutput("issues-created", syncResult.created.toString());
+      core.setOutput("issues-updated", syncResult.updated.toString());
+      core.setOutput("issues-closed", syncResult.closed.toString());
+      core.setOutput("total-changes", syncResult.totalChanges.toString());
+    }
+
+    // 7. Set action status
     if (hasErrors) {
       core.setFailed("Spectr validation failed with errors");
     } else {
