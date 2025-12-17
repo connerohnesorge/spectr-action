@@ -29229,6 +29229,1185 @@ function extractChangeIdFromBody(body) {
 
 /***/ }),
 
+/***/ 2115:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+/**
+ * Spec impact calculation module
+ *
+ * Parses delta spec files and calculates the impact of changes
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.checkArchiveStatus = checkArchiveStatus;
+exports.parseDeltaSpec = parseDeltaSpec;
+exports.calculateSpecImpact = calculateSpecImpact;
+const fs = __importStar(__nccwpck_require__(3024));
+const path = __importStar(__nccwpck_require__(6760));
+/**
+ * Check if a change is archived
+ * @param changeId - The change ID to check
+ * @param workspacePath - Root workspace path
+ * @returns true if archived
+ */
+function checkArchiveStatus(changeId, workspacePath) {
+    const archivePath = path.join(workspacePath, "spectr", "changes", "archive");
+    if (!fs.existsSync(archivePath)) {
+        return false;
+    }
+    try {
+        const entries = fs.readdirSync(archivePath);
+        // Archive entries have format: YYYY-MM-DD-change-id
+        for (const entry of entries) {
+            if (entry.endsWith(`-${changeId}`) || entry === changeId) {
+                return true;
+            }
+        }
+    }
+    catch {
+        return false;
+    }
+    return false;
+}
+/**
+ * Find all spec files under a change's specs directory
+ * @param changeId - The change ID
+ * @param workspacePath - Root workspace path
+ * @returns Array of {capabilityName, filePath} objects
+ */
+function findDeltaSpecFiles(changeId, workspacePath) {
+    const specsDir = path.join(workspacePath, "spectr", "changes", changeId, "specs");
+    if (!fs.existsSync(specsDir)) {
+        return [];
+    }
+    const results = [];
+    try {
+        const entries = fs.readdirSync(specsDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                const specFile = path.join(specsDir, entry.name, "spec.md");
+                if (fs.existsSync(specFile)) {
+                    results.push({
+                        capabilityName: entry.name,
+                        filePath: specFile,
+                    });
+                }
+            }
+        }
+    }
+    catch {
+        return [];
+    }
+    return results;
+}
+/**
+ * Match a requirement header and extract the name
+ * Format: ### Requirement: Name
+ */
+function matchRequirementHeader(line) {
+    if (!line.startsWith("###")) {
+        return null;
+    }
+    // Skip "###" and any whitespace
+    let rest = line.slice(3).trimStart();
+    // Must be followed by "Requirement:"
+    if (!rest.startsWith("Requirement:")) {
+        return null;
+    }
+    // Skip "Requirement:" and any whitespace
+    rest = rest.slice(12).trimStart();
+    return rest || null;
+}
+/**
+ * Check if a line is an H3 header (starts with "### ")
+ */
+function isH3Header(line) {
+    return line.startsWith("### ");
+}
+/**
+ * Check if a line is an H2 delta section header
+ * Returns the delta type if matched, or null otherwise
+ */
+function matchH2DeltaSection(line) {
+    if (!line.startsWith("## ")) {
+        return null;
+    }
+    const rest = line.slice(3).trim();
+    const deltaTypes = ["ADDED", "MODIFIED", "REMOVED", "RENAMED"];
+    for (const dt of deltaTypes) {
+        if (rest === `${dt} Requirements`) {
+            return dt;
+        }
+    }
+    return null;
+}
+/**
+ * Find the content of a delta section in the file
+ * @param content - File content
+ * @param deltaType - Type of delta section to find
+ * @returns Section content (without header), or empty string if not found
+ */
+function findDeltaSectionContent(content, deltaType) {
+    const sectionHeader = `## ${deltaType} Requirements`;
+    const headerStart = content.indexOf(sectionHeader);
+    if (headerStart === -1) {
+        return "";
+    }
+    // Find end of header line
+    let headerEnd = headerStart + sectionHeader.length;
+    while (headerEnd < content.length && content[headerEnd] !== "\n") {
+        headerEnd++;
+    }
+    if (headerEnd < content.length) {
+        headerEnd++; // Include the newline
+    }
+    // Find the next H2 header
+    const rest = content.slice(headerEnd);
+    const lines = rest.split("\n");
+    let offset = 0;
+    for (const line of lines) {
+        const trimmed = line.trimStart();
+        if (trimmed.startsWith("## ")) {
+            return rest.slice(0, offset);
+        }
+        offset += line.length + 1; // +1 for newline
+    }
+    return rest;
+}
+/**
+ * Parse requirements from a section content
+ * @param sectionContent - Content of a delta section (ADDED or MODIFIED)
+ * @returns Array of parsed requirements
+ */
+function parseRequirementsFromSection(sectionContent) {
+    const requirements = [];
+    let currentReq = null;
+    const lines = sectionContent.split("\n");
+    for (const line of lines) {
+        const name = matchRequirementHeader(line);
+        if (name) {
+            // Save previous requirement
+            if (currentReq) {
+                requirements.push(currentReq);
+            }
+            // Start new requirement
+            currentReq = {
+                content: `${line}\n`,
+                name,
+            };
+            continue;
+        }
+        // Check for non-requirement H3 header (ends current requirement)
+        if (isH3Header(line) && !matchRequirementHeader(line)) {
+            if (currentReq) {
+                requirements.push(currentReq);
+                currentReq = null;
+            }
+            continue;
+        }
+        // Check for H2 header (ends current section)
+        if (line.startsWith("## ")) {
+            break;
+        }
+        // Append line to current requirement
+        if (currentReq) {
+            currentReq.content += `${line}\n`;
+        }
+    }
+    // Save the last requirement
+    if (currentReq) {
+        requirements.push(currentReq);
+    }
+    return requirements;
+}
+/**
+ * Parse removed requirements from section content
+ * Removed requirements are just names (from headers or list items)
+ */
+function parseRemovedSection(sectionContent) {
+    const removed = [];
+    const lines = sectionContent.split("\n");
+    for (const line of lines) {
+        const trimmed = line.trim();
+        // Check for requirement header
+        const name = matchRequirementHeader(trimmed);
+        if (name) {
+            removed.push(name);
+            continue;
+        }
+        // Check for list item (- Name or * Name)
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+            const itemText = trimmed.slice(2).trim();
+            if (itemText) {
+                removed.push(itemText);
+            }
+        }
+    }
+    return removed;
+}
+/**
+ * Match FROM line in RENAMED section
+ * Format: - FROM: `### Requirement: Old Name`
+ */
+function matchRenamedFrom(line) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("-")) {
+        return null;
+    }
+    let rest = trimmed.slice(1).trim();
+    const upper = rest.toUpperCase();
+    if (!upper.startsWith("FROM:")) {
+        return null;
+    }
+    rest = rest.slice(5).trim();
+    // Check for backtick-wrapped content
+    if (rest.startsWith("`") && rest.endsWith("`")) {
+        const content = rest.slice(1, -1);
+        const upperContent = content.toUpperCase();
+        if (!upperContent.startsWith("### REQUIREMENT:")) {
+            return null;
+        }
+        const name = content.slice(16).trim(); // len("### Requirement:") = 16
+        return name || null;
+    }
+    // Try without backticks: - FROM: ### Requirement: Name
+    if (!rest.startsWith("###")) {
+        return null;
+    }
+    rest = rest.slice(3).trimStart();
+    const restUpper = rest.toUpperCase();
+    if (!restUpper.startsWith("REQUIREMENT:")) {
+        return null;
+    }
+    const name = rest.slice(12).trim();
+    return name || null;
+}
+/**
+ * Match TO line in RENAMED section
+ * Format: - TO: `### Requirement: New Name`
+ */
+function matchRenamedTo(line) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("-")) {
+        return null;
+    }
+    let rest = trimmed.slice(1).trim();
+    const upper = rest.toUpperCase();
+    if (!upper.startsWith("TO:")) {
+        return null;
+    }
+    rest = rest.slice(3).trim();
+    // Check for backtick-wrapped content
+    if (rest.startsWith("`") && rest.endsWith("`")) {
+        const content = rest.slice(1, -1);
+        const upperContent = content.toUpperCase();
+        if (!upperContent.startsWith("### REQUIREMENT:")) {
+            return null;
+        }
+        const name = content.slice(16).trim();
+        return name || null;
+    }
+    // Try without backticks
+    if (!rest.startsWith("###")) {
+        return null;
+    }
+    rest = rest.slice(3).trimStart();
+    const restUpper = rest.toUpperCase();
+    if (!restUpper.startsWith("REQUIREMENT:")) {
+        return null;
+    }
+    const name = rest.slice(12).trim();
+    return name || null;
+}
+/**
+ * Parse renamed requirements from section content
+ * Format: FROM/TO pairs on separate lines
+ */
+function parseRenamedSection(sectionContent) {
+    const renamed = [];
+    let currentFrom = null;
+    const lines = sectionContent.split("\n");
+    for (const line of lines) {
+        // Check for FROM line
+        const fromName = matchRenamedFrom(line);
+        if (fromName) {
+            currentFrom = fromName;
+            continue;
+        }
+        // Check for TO line
+        const toName = matchRenamedTo(line);
+        if (toName && currentFrom) {
+            renamed.push({
+                from: currentFrom,
+                to: toName,
+            });
+            currentFrom = null;
+        }
+    }
+    return renamed;
+}
+/**
+ * Parse a delta spec file and extract all operations
+ * @param filePath - Path to the spec.md file
+ * @returns Parsed delta plan
+ */
+function parseDeltaSpec(filePath) {
+    const plan = {
+        added: [],
+        modified: [],
+        removed: [],
+        renamed: [],
+    };
+    try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        // Parse each section
+        const addedContent = findDeltaSectionContent(content, "ADDED");
+        if (addedContent) {
+            plan.added = parseRequirementsFromSection(addedContent);
+        }
+        const modifiedContent = findDeltaSectionContent(content, "MODIFIED");
+        if (modifiedContent) {
+            plan.modified = parseRequirementsFromSection(modifiedContent);
+        }
+        const removedContent = findDeltaSectionContent(content, "REMOVED");
+        if (removedContent) {
+            plan.removed = parseRemovedSection(removedContent);
+        }
+        const renamedContent = findDeltaSectionContent(content, "RENAMED");
+        if (renamedContent) {
+            plan.renamed = parseRenamedSection(renamedContent);
+        }
+    }
+    catch {
+        // Return empty plan on error
+    }
+    return plan;
+}
+/**
+ * Calculate spec impact for a change proposal
+ * @param changeId - The change ID
+ * @param workspacePath - Root workspace path
+ * @param mode - PR mode (proposal, archive, remove)
+ * @returns Full spec impact
+ */
+async function calculateSpecImpact(changeId, workspacePath, mode) {
+    const isArchived = checkArchiveStatus(changeId, workspacePath);
+    const specFiles = findDeltaSpecFiles(changeId, workspacePath);
+    const changes = [];
+    const capabilities = [];
+    const counts = {
+        added: 0,
+        modified: 0,
+        removed: 0,
+        renamed: 0,
+        total: 0,
+    };
+    for (const { capabilityName, filePath } of specFiles) {
+        capabilities.push(capabilityName);
+        const plan = parseDeltaSpec(filePath);
+        // Process added requirements
+        for (const req of plan.added) {
+            changes.push({
+                capabilityName,
+                content: req.content.trim(),
+                operation: "add",
+                requirementName: req.name,
+            });
+            counts.added++;
+        }
+        // Process modified requirements
+        for (const req of plan.modified) {
+            changes.push({
+                capabilityName,
+                content: req.content.trim(),
+                operation: "modify",
+                requirementName: req.name,
+            });
+            counts.modified++;
+        }
+        // Process removed requirements
+        for (const name of plan.removed) {
+            changes.push({
+                capabilityName,
+                operation: "remove",
+                requirementName: name,
+            });
+            counts.removed++;
+        }
+        // Process renamed requirements
+        for (const rename of plan.renamed) {
+            changes.push({
+                capabilityName,
+                oldName: rename.from,
+                operation: "rename",
+                requirementName: rename.to,
+            });
+            counts.renamed++;
+        }
+    }
+    counts.total =
+        counts.added + counts.modified + counts.removed + counts.renamed;
+    return {
+        capabilities,
+        changeId,
+        changes,
+        counts,
+        isArchived,
+        mode,
+    };
+}
+
+
+/***/ }),
+
+/***/ 4822:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+/**
+ * GitHub API integration for PR comments
+ *
+ * Handles creating, updating, and finding PR impact comments
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createOctokitClient = createOctokitClient;
+exports.getRepoContext = getRepoContext;
+exports.findImpactComment = findImpactComment;
+exports.findAnyImpactComment = findAnyImpactComment;
+exports.createPRComment = createPRComment;
+exports.updatePRComment = updatePRComment;
+const core_1 = __nccwpck_require__(767);
+const plugin_paginate_rest_1 = __nccwpck_require__(3779);
+const plugin_rest_endpoint_methods_1 = __nccwpck_require__(9210);
+const types_1 = __nccwpck_require__(8730);
+// Create Octokit with plugins
+const ExtendedOctokit = core_1.Octokit.plugin(plugin_paginate_rest_1.paginateRest, plugin_rest_endpoint_methods_1.restEndpointMethods);
+/**
+ * Create an authenticated Octokit client
+ */
+function createOctokitClient(token) {
+    return new ExtendedOctokit({ auth: token });
+}
+/**
+ * Get repository context from environment
+ */
+function getRepoContext() {
+    const repository = process.env.GITHUB_REPOSITORY;
+    if (!repository) {
+        throw new Error("GITHUB_REPOSITORY environment variable is not set");
+    }
+    const [owner, repo] = repository.split("/");
+    if (!owner || !repo) {
+        throw new Error(`Invalid GITHUB_REPOSITORY format: ${repository}`);
+    }
+    return { owner, repo };
+}
+/**
+ * Find an existing PR impact comment by marker
+ * @param octokit - Authenticated Octokit client
+ * @param repo - Repository context
+ * @param prNumber - PR number
+ * @param changeId - Change ID to search for
+ * @returns Existing comment info or null if not found
+ */
+async function findImpactComment(octokit, repo, prNumber, changeId) {
+    // Get all comments on the PR
+    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+        issue_number: prNumber,
+        owner: repo.owner,
+        per_page: 100,
+        repo: repo.repo,
+    });
+    // Look for our marker
+    const markerPattern = new RegExp(`<!--\\s*spectr-pr-impact:${changeId}\\s*-->`);
+    for (const comment of comments) {
+        if (comment.body && markerPattern.test(comment.body)) {
+            return {
+                body: comment.body,
+                id: comment.id,
+            };
+        }
+    }
+    return null;
+}
+/**
+ * Find any existing PR impact comment (regardless of change ID)
+ * @param octokit - Authenticated Octokit client
+ * @param repo - Repository context
+ * @param prNumber - PR number
+ * @returns Existing comment info with change ID, or null if not found
+ */
+async function findAnyImpactComment(octokit, repo, prNumber) {
+    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+        issue_number: prNumber,
+        owner: repo.owner,
+        per_page: 100,
+        repo: repo.repo,
+    });
+    for (const comment of comments) {
+        if (comment.body) {
+            const match = comment.body.match(types_1.PR_IMPACT_MARKER_PATTERN);
+            if (match) {
+                return {
+                    body: comment.body,
+                    changeId: match[1],
+                    id: comment.id,
+                };
+            }
+        }
+    }
+    return null;
+}
+/**
+ * Create a new PR comment
+ * @param octokit - Authenticated Octokit client
+ * @param repo - Repository context
+ * @param prNumber - PR number
+ * @param body - Comment body
+ * @returns Created comment ID and URL
+ */
+async function createPRComment(octokit, repo, prNumber, body) {
+    const response = await octokit.rest.issues.createComment({
+        body,
+        issue_number: prNumber,
+        owner: repo.owner,
+        repo: repo.repo,
+    });
+    return {
+        id: response.data.id,
+        url: response.data.html_url,
+    };
+}
+/**
+ * Update an existing PR comment
+ * @param octokit - Authenticated Octokit client
+ * @param repo - Repository context
+ * @param commentId - Comment ID to update
+ * @param body - New comment body
+ * @returns Updated comment URL
+ */
+async function updatePRComment(octokit, repo, commentId, body) {
+    const response = await octokit.rest.issues.updateComment({
+        body,
+        comment_id: commentId,
+        owner: repo.owner,
+        repo: repo.repo,
+    });
+    return response.data.html_url;
+}
+
+
+/***/ }),
+
+/***/ 1516:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+/**
+ * PR detection module for spectr PR impact feature
+ *
+ * Detects if running on a spectr PR and extracts relevant context
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseSpectrBranch = parseSpectrBranch;
+exports.getPRNumberFromEvent = getPRNumberFromEvent;
+exports.getHeadBranchName = getHeadBranchName;
+exports.isPullRequestEvent = isPullRequestEvent;
+exports.detectPRContext = detectPRContext;
+const fs = __importStar(__nccwpck_require__(3024));
+/**
+ * Spectr branch pattern
+ * Matches: spectr/proposal/<change-id>, spectr/archive/<change-id>, spectr/remove/<change-id>
+ */
+const SPECTR_BRANCH_PATTERN = /^spectr\/(proposal|archive|remove)\/(.+)$/;
+/**
+ * Parse a branch name to extract spectr PR information
+ * @param branchName - The branch name to parse
+ * @returns Parsed branch info
+ */
+function parseSpectrBranch(branchName) {
+    const match = branchName.match(SPECTR_BRANCH_PATTERN);
+    if (!match) {
+        return {
+            changeId: null,
+            isSpectrBranch: false,
+            mode: null,
+        };
+    }
+    return {
+        changeId: match[2],
+        isSpectrBranch: true,
+        mode: match[1],
+    };
+}
+/**
+ * Get PR number from GitHub event payload
+ * @returns PR number or null if not found
+ */
+function getPRNumberFromEvent() {
+    const eventPath = process.env.GITHUB_EVENT_PATH;
+    if (!eventPath) {
+        return null;
+    }
+    try {
+        const eventData = JSON.parse(fs.readFileSync(eventPath, "utf-8"));
+        // For pull_request events, the PR number is in the payload
+        if (eventData.pull_request?.number) {
+            return eventData.pull_request.number;
+        }
+        // For issue_comment or other PR-related events
+        if (eventData.issue?.pull_request && eventData.issue?.number) {
+            return eventData.issue.number;
+        }
+        return null;
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Get the head branch name for the current PR
+ * @returns Branch name or null if not found
+ */
+function getHeadBranchName() {
+    // GITHUB_HEAD_REF is set for pull_request events
+    const headRef = process.env.GITHUB_HEAD_REF;
+    if (headRef) {
+        return headRef;
+    }
+    // For push events, we can try to parse from GITHUB_REF
+    // Format: refs/heads/<branch-name>
+    const ref = process.env.GITHUB_REF;
+    if (ref?.startsWith("refs/heads/")) {
+        return ref.replace("refs/heads/", "");
+    }
+    // Try to read from event payload
+    const eventPath = process.env.GITHUB_EVENT_PATH;
+    if (eventPath) {
+        try {
+            const eventData = JSON.parse(fs.readFileSync(eventPath, "utf-8"));
+            if (eventData.pull_request?.head?.ref) {
+                return eventData.pull_request.head.ref;
+            }
+        }
+        catch {
+            // Ignore parse errors
+        }
+    }
+    return null;
+}
+/**
+ * Check if running on a pull request event
+ * @returns true if this is a PR event
+ */
+function isPullRequestEvent() {
+    const eventName = process.env.GITHUB_EVENT_NAME;
+    return (eventName === "pull_request" ||
+        eventName === "pull_request_target" ||
+        eventName === "pull_request_review" ||
+        eventName === "pull_request_review_comment");
+}
+/**
+ * Detect PR context from GitHub Actions environment
+ * @returns Full PR context with all detected information
+ */
+function detectPRContext() {
+    const isPR = isPullRequestEvent();
+    const branchName = getHeadBranchName();
+    const prNumber = getPRNumberFromEvent();
+    // Default context for non-PR events
+    if (!isPR || !branchName) {
+        return {
+            branchName,
+            changeId: null,
+            isPR,
+            isSpectrPR: false,
+            mode: null,
+            prNumber,
+        };
+    }
+    // Parse the branch name to check if it's a spectr PR
+    const branchInfo = parseSpectrBranch(branchName);
+    return {
+        branchName,
+        changeId: branchInfo.changeId,
+        isPR,
+        isSpectrPR: branchInfo.isSpectrBranch,
+        mode: branchInfo.mode,
+        prNumber,
+    };
+}
+
+
+/***/ }),
+
+/***/ 7848:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+/**
+ * PR comment formatting module
+ *
+ * Formats spec impact information as Markdown for PR comments
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.formatSummaryTable = formatSummaryTable;
+exports.formatDiffPreview = formatDiffPreview;
+exports.formatPRComment = formatPRComment;
+exports.commentsMatch = commentsMatch;
+const types_1 = __nccwpck_require__(8730);
+/**
+ * Format operation counts as a summary table
+ */
+function formatSummaryTable(counts) {
+    const lines = [
+        "| Operation | Count |",
+        "|-----------|-------|",
+        `| Added | ${counts.added} |`,
+        `| Modified | ${counts.modified} |`,
+        `| Removed | ${counts.removed} |`,
+        `| Renamed | ${counts.renamed} |`,
+    ];
+    return lines.join("\n");
+}
+/**
+ * Format the status table with mode and archive status
+ */
+function formatStatusTable(impact) {
+    const archiveStatus = impact.isArchived ? "Yes" : "No";
+    const modeDisplay = impact.mode.charAt(0).toUpperCase() + impact.mode.slice(1);
+    const lines = [
+        "| Status | Value |",
+        "|--------|-------|",
+        `| Mode | ${modeDisplay} |`,
+        `| Archived | ${archiveStatus} |`,
+    ];
+    return lines.join("\n");
+}
+/**
+ * Format affected capabilities list
+ */
+function formatCapabilitiesList(impact) {
+    if (impact.capabilities.length === 0) {
+        return "_No capabilities affected_";
+    }
+    // Count changes per capability
+    const changeCounts = new Map();
+    for (const change of impact.changes) {
+        const count = changeCounts.get(change.capabilityName) || 0;
+        changeCounts.set(change.capabilityName, count + 1);
+    }
+    const lines = [];
+    for (const capability of impact.capabilities) {
+        const count = changeCounts.get(capability) || 0;
+        const plural = count === 1 ? "change" : "changes";
+        lines.push(`- \`${capability}\` - ${count} ${plural}`);
+    }
+    return lines.join("\n");
+}
+/**
+ * Format changes for a single capability as a collapsible section
+ */
+function formatCapabilityChanges(capabilityName, changes) {
+    const capabilityChanges = changes.filter((c) => c.capabilityName === capabilityName);
+    if (capabilityChanges.length === 0) {
+        return "";
+    }
+    const plural = capabilityChanges.length === 1 ? "change" : "changes";
+    const lines = [
+        "<details>",
+        `<summary><strong>${capabilityName}</strong> (${capabilityChanges.length} ${plural})</summary>`,
+        "",
+    ];
+    // Group by operation type
+    const added = capabilityChanges.filter((c) => c.operation === "add");
+    const modified = capabilityChanges.filter((c) => c.operation === "modify");
+    const removed = capabilityChanges.filter((c) => c.operation === "remove");
+    const renamed = capabilityChanges.filter((c) => c.operation === "rename");
+    if (added.length > 0) {
+        lines.push("#### Added");
+        lines.push("");
+        for (const change of added) {
+            lines.push(`##### \`Requirement: ${change.requirementName}\``);
+            if (change.content) {
+                // Format content - skip the header line if it's included
+                const content = change.content
+                    .split("\n")
+                    .filter((line) => !line.startsWith("### Requirement:"))
+                    .join("\n")
+                    .trim();
+                if (content) {
+                    lines.push(content);
+                }
+            }
+            lines.push("");
+        }
+    }
+    if (modified.length > 0) {
+        lines.push("#### Modified");
+        lines.push("");
+        for (const change of modified) {
+            lines.push(`##### \`Requirement: ${change.requirementName}\``);
+            if (change.content) {
+                const content = change.content
+                    .split("\n")
+                    .filter((line) => !line.startsWith("### Requirement:"))
+                    .join("\n")
+                    .trim();
+                if (content) {
+                    lines.push(content);
+                }
+            }
+            lines.push("");
+        }
+    }
+    if (renamed.length > 0) {
+        lines.push("#### Renamed");
+        lines.push("");
+        for (const change of renamed) {
+            lines.push(`- \`${change.oldName}\` → \`${change.requirementName}\``);
+        }
+        lines.push("");
+    }
+    if (removed.length > 0) {
+        lines.push("#### Removed");
+        lines.push("");
+        for (const change of removed) {
+            lines.push(`- \`Requirement: ${change.requirementName}\``);
+        }
+        lines.push("");
+    }
+    lines.push("</details>");
+    return lines.join("\n");
+}
+/**
+ * Format the full diff preview with all changes
+ */
+function formatDiffPreview(changes) {
+    if (changes.length === 0) {
+        return "_No spec changes detected_";
+    }
+    // Get unique capabilities
+    const capabilities = [...new Set(changes.map((c) => c.capabilityName))];
+    const sections = [];
+    for (const capability of capabilities) {
+        const section = formatCapabilityChanges(capability, changes);
+        if (section) {
+            sections.push(section);
+        }
+    }
+    return sections.join("\n\n");
+}
+/**
+ * Format the complete PR comment body
+ */
+function formatPRComment(impact) {
+    const marker = (0, types_1.generatePRImpactMarker)(impact.changeId);
+    const sections = [
+        marker,
+        "",
+        `## Spectr Impact: \`${impact.changeId}\``,
+        "",
+        formatStatusTable(impact),
+        "",
+        "### Summary",
+        "",
+        formatSummaryTable(impact.counts),
+        "",
+        "### Affected Capabilities",
+        "",
+        formatCapabilitiesList(impact),
+        "",
+        "### Changes",
+        "",
+        formatDiffPreview(impact.changes),
+        "",
+        "---",
+        `*Generated by [spectr-action](https://github.com/connerohnesorge/spectr-action) | [View proposal](spectr/changes/${impact.changeId}/proposal.md)*`,
+    ];
+    let body = sections.join("\n");
+    // Truncate if too long
+    if (body.length > types_1.MAX_COMMENT_BODY_LENGTH) {
+        const truncationNotice = "\n\n_... content truncated due to length ..._\n\n---\n*Generated by spectr-action*";
+        const maxContentLength = types_1.MAX_COMMENT_BODY_LENGTH - truncationNotice.length;
+        body = body.slice(0, maxContentLength) + truncationNotice;
+    }
+    return body;
+}
+/**
+ * Check if two comment bodies are equivalent
+ * Ignores whitespace differences
+ */
+function commentsMatch(existing, updated) {
+    const normalize = (s) => s.replace(/\s+/g, " ").trim();
+    return normalize(existing) === normalize(updated);
+}
+
+
+/***/ }),
+
+/***/ 4015:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+/**
+ * PR Impact feature main module
+ *
+ * Orchestrates detection, calculation, formatting, and commenting
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.runPRImpact = runPRImpact;
+const core = __importStar(__nccwpck_require__(7484));
+const calculate_1 = __nccwpck_require__(2115);
+const comment_1 = __nccwpck_require__(4822);
+const detect_1 = __nccwpck_require__(1516);
+const format_1 = __nccwpck_require__(7848);
+/**
+ * Run the PR impact feature
+ *
+ * 1. Detects if running on a spectr PR
+ * 2. Calculates spec impact from delta specs
+ * 3. Creates or updates a PR comment with the impact
+ *
+ * @param config - PR impact configuration
+ * @param workspacePath - Root workspace path
+ * @returns Result of the operation
+ */
+async function runPRImpact(config, workspacePath) {
+    // Default result for when we don't run
+    const defaultResult = {
+        changeId: null,
+        commentCreated: false,
+        commentUpdated: false,
+        commentUrl: null,
+        mode: null,
+        ran: false,
+    };
+    // 1. Detect PR context
+    const prContext = (0, detect_1.detectPRContext)();
+    if (!prContext.isPR) {
+        core.info("Not running on a pull request event");
+        return defaultResult;
+    }
+    if (!prContext.isSpectrPR) {
+        core.info(`Not a spectr PR branch: ${prContext.branchName || "unknown"}`);
+        return defaultResult;
+    }
+    if (!prContext.prNumber) {
+        core.warning("Could not determine PR number from event");
+        return defaultResult;
+    }
+    if (!prContext.changeId || !prContext.mode) {
+        core.warning("Could not extract change ID or mode from branch name");
+        return defaultResult;
+    }
+    core.info(`Detected spectr PR: ${prContext.mode}/${prContext.changeId}`);
+    core.info(`PR number: ${prContext.prNumber}`);
+    // 2. Calculate spec impact
+    core.info("Calculating spec impact...");
+    const impact = await (0, calculate_1.calculateSpecImpact)(prContext.changeId, workspacePath, prContext.mode);
+    core.info(`Found ${impact.counts.total} spec changes across ${impact.capabilities.length} capabilities`);
+    core.info(`  Added: ${impact.counts.added}`);
+    core.info(`  Modified: ${impact.counts.modified}`);
+    core.info(`  Removed: ${impact.counts.removed}`);
+    core.info(`  Renamed: ${impact.counts.renamed}`);
+    core.info(`  Archived: ${impact.isArchived ? "Yes" : "No"}`);
+    // 3. Format PR comment
+    const commentBody = (0, format_1.formatPRComment)(impact);
+    // 4. Create or update comment
+    const octokit = (0, comment_1.createOctokitClient)(config.githubToken);
+    const repo = (0, comment_1.getRepoContext)();
+    let commentCreated = false;
+    let commentUpdated = false;
+    let commentUrl = null;
+    // Check for existing comment
+    const existingComment = await (0, comment_1.findImpactComment)(octokit, repo, prContext.prNumber, prContext.changeId);
+    if (existingComment) {
+        // Check if update is needed
+        if (config.updateComment) {
+            if (!(0, format_1.commentsMatch)(existingComment.body, commentBody)) {
+                core.info("Updating existing PR impact comment...");
+                commentUrl = await (0, comment_1.updatePRComment)(octokit, repo, existingComment.id, commentBody);
+                commentUpdated = true;
+                core.info(`Updated comment: ${commentUrl}`);
+            }
+            else {
+                core.info("Existing comment is up to date, skipping update");
+                // Get the URL from the API since we don't have it cached
+                commentUrl = `https://github.com/${repo.owner}/${repo.repo}/pull/${prContext.prNumber}#issuecomment-${existingComment.id}`;
+            }
+        }
+        else {
+            core.info("Existing comment found but updateComment is disabled, creating new comment");
+            const result = await (0, comment_1.createPRComment)(octokit, repo, prContext.prNumber, commentBody);
+            commentUrl = result.url;
+            commentCreated = true;
+            core.info(`Created comment: ${commentUrl}`);
+        }
+    }
+    else {
+        // Create new comment
+        core.info("Creating new PR impact comment...");
+        const result = await (0, comment_1.createPRComment)(octokit, repo, prContext.prNumber, commentBody);
+        commentUrl = result.url;
+        commentCreated = true;
+        core.info(`Created comment: ${commentUrl}`);
+    }
+    return {
+        changeId: prContext.changeId,
+        commentCreated,
+        commentUpdated,
+        commentUrl,
+        mode: prContext.mode,
+        ran: true,
+    };
+}
+
+
+/***/ }),
+
+/***/ 8730:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/**
+ * TypeScript type definitions for PR spec impact feature
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.MAX_COMMENT_BODY_LENGTH = exports.PR_IMPACT_MARKER_PATTERN = void 0;
+exports.generatePRImpactMarker = generatePRImpactMarker;
+exports.extractChangeIdFromComment = extractChangeIdFromComment;
+/**
+ * Marker comment pattern for identifying PR impact comments
+ * Format: <!-- spectr-pr-impact:CHANGE_ID -->
+ */
+exports.PR_IMPACT_MARKER_PATTERN = /<!--\s*spectr-pr-impact:([a-zA-Z0-9_-]+)\s*-->/;
+/**
+ * Maximum comment body length (GitHub limit)
+ */
+exports.MAX_COMMENT_BODY_LENGTH = 65536;
+/**
+ * Generate the marker comment for a change ID
+ */
+function generatePRImpactMarker(changeId) {
+    return `<!-- spectr-pr-impact:${changeId} -->`;
+}
+/**
+ * Extract change ID from comment body using marker pattern
+ */
+function extractChangeIdFromComment(body) {
+    const match = body.match(exports.PR_IMPACT_MARKER_PATTERN);
+    return match ? match[1] : null;
+}
+
+
+/***/ }),
+
 /***/ 1737:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -29273,6 +30452,7 @@ const core = __importStar(__nccwpck_require__(7484));
 const exec = __importStar(__nccwpck_require__(5236));
 const download_version_1 = __nccwpck_require__(8255);
 const issues_1 = __nccwpck_require__(104);
+const pr_impact_1 = __nccwpck_require__(4015);
 const spectr_1 = __nccwpck_require__(6728);
 const inputs_1 = __nccwpck_require__(9612);
 const platforms_1 = __nccwpck_require__(8361);
@@ -29302,13 +30482,28 @@ async function run() {
         const validationOutput = await runSpectrValidation(spectrPath, strict);
         // 5. Process results and create annotations
         const hasErrors = await processValidationResults(validationOutput);
-        // 6. Run issue sync if enabled
+        // 6. Get workspace path for optional features
+        const workspacePath = process.env.GITHUB_WORKSPACE;
+        if (!workspacePath) {
+            throw new Error("GITHUB_WORKSPACE environment variable is not set");
+        }
+        // 7. Run PR impact comment if enabled
+        const prImpactConfig = (0, inputs_1.getPRImpactConfig)();
+        if (prImpactConfig.enabled) {
+            core.info("");
+            core.info("=== PR Impact ===");
+            const prImpactResult = await (0, pr_impact_1.runPRImpact)(prImpactConfig, workspacePath);
+            // Set PR impact outputs
+            core.setOutput("pr-impact-comment-created", prImpactResult.commentCreated.toString());
+            core.setOutput("pr-impact-comment-updated", prImpactResult.commentUpdated.toString());
+            core.setOutput("pr-change-id", prImpactResult.changeId || "");
+            if (prImpactResult.ran && prImpactResult.commentUrl) {
+                core.info(`PR impact comment: ${prImpactResult.commentUrl}`);
+            }
+        }
+        // 8. Run issue sync if enabled
         const issueSyncConfig = (0, inputs_1.getIssueSyncConfig)();
         if (issueSyncConfig.enabled) {
-            const workspacePath = process.env.GITHUB_WORKSPACE;
-            if (!workspacePath) {
-                throw new Error("GITHUB_WORKSPACE environment variable is not set");
-            }
             core.info("");
             core.info("=== Issue Sync ===");
             const syncResult = await (0, issues_1.syncIssues)(issueSyncConfig, workspacePath);
@@ -29318,7 +30513,7 @@ async function run() {
             core.setOutput("issues-closed", syncResult.closed.toString());
             core.setOutput("total-changes", syncResult.totalChanges.toString());
         }
-        // 7. Set action status
+        // 9. Set action status
         if (hasErrors) {
             core.setFailed("Spectr validation failed with errors");
         }
@@ -29653,6 +30848,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.versionFile = exports.src = exports.args = exports.githubToken = exports.version = void 0;
 exports.getIssueSyncConfig = getIssueSyncConfig;
+exports.getPRImpactConfig = getPRImpactConfig;
 const core = __importStar(__nccwpck_require__(7484));
 exports.version = core.getInput("version");
 exports.githubToken = core.getInput("github-token");
@@ -29688,6 +30884,19 @@ function parseLabels(labelsInput) {
         .split(",")
         .map((label) => label.trim())
         .filter((label) => label.length > 0);
+}
+/**
+ * Get PR impact configuration from action inputs
+ */
+function getPRImpactConfig() {
+    const prImpact = core.getInput("pr-impact");
+    const updateComment = core.getInput("pr-impact-update-comment");
+    const token = core.getInput("github-token");
+    return {
+        enabled: prImpact.toLowerCase() === "true",
+        githubToken: token,
+        updateComment: updateComment.toLowerCase() !== "false",
+    };
 }
 
 

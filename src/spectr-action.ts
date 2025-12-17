@@ -7,9 +7,10 @@ import {
   tryGetFromToolCache,
 } from "./download/download-version";
 import { syncIssues } from "./issues";
+import { runPRImpact } from "./pr-impact";
 import type { ValidationOutput } from "./types/spectr";
 import { hasReport } from "./types/spectr";
-import { getIssueSyncConfig } from "./utils/inputs";
+import { getIssueSyncConfig, getPRImpactConfig } from "./utils/inputs";
 import type { Architecture, Platform } from "./utils/platforms";
 import { getArch, getPlatform } from "./utils/platforms";
 
@@ -46,13 +47,38 @@ async function run(): Promise<void> {
     // 5. Process results and create annotations
     const hasErrors = await processValidationResults(validationOutput);
 
-    // 6. Run issue sync if enabled
+    // 6. Get workspace path for optional features
+    const workspacePath = process.env.GITHUB_WORKSPACE;
+    if (!workspacePath) {
+      throw new Error("GITHUB_WORKSPACE environment variable is not set");
+    }
+
+    // 7. Run PR impact comment if enabled
+    const prImpactConfig = getPRImpactConfig();
+    if (prImpactConfig.enabled) {
+      core.info("");
+      core.info("=== PR Impact ===");
+      const prImpactResult = await runPRImpact(prImpactConfig, workspacePath);
+
+      // Set PR impact outputs
+      core.setOutput(
+        "pr-impact-comment-created",
+        prImpactResult.commentCreated.toString(),
+      );
+      core.setOutput(
+        "pr-impact-comment-updated",
+        prImpactResult.commentUpdated.toString(),
+      );
+      core.setOutput("pr-change-id", prImpactResult.changeId || "");
+
+      if (prImpactResult.ran && prImpactResult.commentUrl) {
+        core.info(`PR impact comment: ${prImpactResult.commentUrl}`);
+      }
+    }
+
+    // 8. Run issue sync if enabled
     const issueSyncConfig = getIssueSyncConfig();
     if (issueSyncConfig.enabled) {
-      const workspacePath = process.env.GITHUB_WORKSPACE;
-      if (!workspacePath) {
-        throw new Error("GITHUB_WORKSPACE environment variable is not set");
-      }
       core.info("");
       core.info("=== Issue Sync ===");
       const syncResult = await syncIssues(issueSyncConfig, workspacePath);
@@ -64,7 +90,7 @@ async function run(): Promise<void> {
       core.setOutput("total-changes", syncResult.totalChanges.toString());
     }
 
-    // 7. Set action status
+    // 9. Set action status
     if (hasErrors) {
       core.setFailed("Spectr validation failed with errors");
     } else {

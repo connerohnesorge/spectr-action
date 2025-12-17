@@ -1,5 +1,6 @@
 import * as core from "@actions/core";
 import type { IssueSyncConfig } from "../issues/types";
+import type { PRImpactConfig } from "../pr-impact/types";
 
 export const version = core.getInput("version");
 export const githubToken = core.getInput("github-token");
@@ -38,4 +39,19 @@ function parseLabels(labelsInput: string): string[] {
     .split(",")
     .map((label) => label.trim())
     .filter((label) => label.length > 0);
+}
+
+/**
+ * Get PR impact configuration from action inputs
+ */
+export function getPRImpactConfig(): PRImpactConfig {
+  const prImpact = core.getInput("pr-impact");
+  const updateComment = core.getInput("pr-impact-update-comment");
+  const token = core.getInput("github-token");
+
+  return {
+    enabled: prImpact.toLowerCase() === "true",
+    githubToken: token,
+    updateComment: updateComment.toLowerCase() !== "false",
+  };
 }
