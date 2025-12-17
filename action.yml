@@ -48,6 +48,16 @@ inputs:
     required: false
     default: "spectr-managed"
 
+  pr-impact:
+    description: "Enable PR impact comment for spectr PRs. Set to 'true' to show spec changes on PR."
+    required: false
+    default: "false"
+
+  pr-impact-update-comment:
+    description: "Update existing PR impact comment instead of creating new. Set to 'false' for new comment each run."
+    required: false
+    default: "true"
+
 outputs:
   spectr-version:
     description: "The version of Spectr that was installed and used"
@@ -63,6 +73,15 @@ outputs:
 
   total-changes:
     description: "Total number of active change proposals discovered"
+
+  pr-impact-comment-created:
+    description: "Whether a new PR impact comment was created"
+
+  pr-impact-comment-updated:
+    description: "Whether an existing PR impact comment was updated"
+
+  pr-change-id:
+    description: "The spectr change ID detected from the PR branch"
 
 runs:
   using: "node20"
