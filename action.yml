@@ -13,11 +13,6 @@ inputs:
     required: false
     default: ${{ github.token }}
 
-  strict:
-    description: "Treat warnings as errors (enables --strict mode). Set to 'false' to ignore warnings."
-    required: false
-    default: "true"
-
   sync-issues:
     description: "Enable GitHub Issues sync for change proposals. Set to 'true' to create/update issues."
     required: false

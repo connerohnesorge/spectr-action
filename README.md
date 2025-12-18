@@ -6,7 +6,7 @@ A GitHub Action to run Spectr
 
 > GitHub Action for validating spec-driven development projects using Spectr
 
-This action automatically validates your specification-driven codebase by running `spectr validate --all --strict --json` and reporting issues as GitHub annotations.
+This action automatically validates your specification-driven codebase by running `spectr validate --all --json` and reporting issues as GitHub annotations.
 
 ## Purpose
 
@@ -21,7 +21,7 @@ This action:
 - Installs the specified version of Spectr (or latest)
 - Runs comprehensive validation on your `spectr/` directory
 - Creates GitHub annotations for any errors, warnings, or info messages
-- Fails the workflow if validation errors are found (or warnings, if strict mode is enabled)
+- Fails the workflow if validation errors or warnings are found
 - Provides detailed file locations and line numbers for issues
 
 ### When to use this action
@@ -49,7 +49,7 @@ jobs:
       - uses: connerohnesorge/spectr-action@v1
 ```
 
-That's it! The action will use the latest version of Spectr and run in strict mode by default.
+That's it! The action will use the latest version of Spectr.
 
 ## Inputs
 
@@ -64,12 +64,6 @@ That's it! The action will use the latest version of Spectr and run in strict mo
 **Description:** GitHub token used to increase rate limits when retrieving versions and downloading Spectr. Uses the default GitHub Actions token automatically.
 **Required:** No
 **Default:** `${{ github.token }}`
-
-### `strict`
-
-**Description:** Treat warnings as errors (enables `--strict` mode). Set to `false` to allow warnings without failing the build.
-**Required:** No
-**Default:** `true`
 
 ### `sync-issues`
 
@@ -143,7 +137,7 @@ That's it! The action will use the latest version of Spectr and run in strict mo
 The action automatically creates GitHub annotations for all validation issues:
 
 - **Errors** (red): Critical problems that must be fixed
-- **Warnings** (yellow): Issues that should be addressed (fail in strict mode)
+- **Warnings** (yellow): Issues that should be addressed
 - **Info** (blue): Informational messages
 
 Each annotation includes:
@@ -177,25 +171,7 @@ jobs:
       - uses: connerohnesorge/spectr-action@v1
 ```
 
-### Example 2: Strict Mode Disabled
-
-Allow warnings without failing the build:
-
-```yaml
-name: Spectr Validation
-on: [push, pull_request]
-
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: connerohnesorge/spectr-action@v1
-        with:
-          strict: "false"
-```
-
-### Example 3: Specific Version
+### Example 2: Specific Version
 
 Pin to a specific Spectr version for consistency:
 
@@ -242,7 +218,6 @@ jobs:
         id: spectr
         with:
           version: latest
-          strict: true
 
       - name: Print validation summary
         if: always()
@@ -270,39 +245,9 @@ jobs:
         with:
           version: "0.1.0"
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          strict: "true"
 ```
 
-### Example 6: Multiple Validation Jobs
-
-Run both strict and non-strict validation in parallel:
-
-```yaml
-name: Comprehensive Validation
-on: [push, pull_request]
-
-jobs:
-  validate-strict:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Strict validation
-        uses: connerohnesorge/spectr-action@v1
-        with:
-          strict: "true"
-
-  validate-warnings-only:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Warning check (non-blocking)
-        uses: connerohnesorge/spectr-action@v1
-        with:
-          strict: "false"
-        continue-on-error: true
-```
-
-### Example 7: Using Outputs
+### Example 6: Using Outputs
 
 Capture and use the Spectr version output:
 
@@ -330,7 +275,7 @@ jobs:
         run: echo "Validation passed, ready to merge!"
 ```
 
-### Example 8: Issue Sync
+### Example 7: Issue Sync
 
 Enable automatic GitHub Issues sync for change proposals:
 
@@ -401,7 +346,6 @@ jobs:
         id: spectr-validate
         with:
           version: latest
-          strict: true
           github-token: ${{ github.token }}
 
       - name: Report validation results
@@ -511,7 +455,7 @@ Warnings:
   - Invalid spec format
   - Broken references
 
-- **Warning**: Best practice violations (fail in strict mode)
+- **Warning**: Best practice violations that should be addressed
   - Formatting recommendations
   - Potential improvements
   - Style inconsistencies
@@ -567,7 +511,7 @@ jobs:
 
 1. Update to the latest action version
 2. Check the spectr version compatibility
-3. Run `spectr validate --all --strict --json` locally to debug
+3. Run `spectr validate --all --json` locally to debug
 
 ```yaml
 - uses: connerohnesorge/spectr-action@v1 # Uses latest action
@@ -613,7 +557,7 @@ repository-root/
 
 **Solutions:**
 
-1. Run `spectr validate --all --strict` locally to see detailed output
+1. Run `spectr validate --all` locally to see detailed output
 2. Check for invisible characters or formatting issues
 3. Verify spec format follows Spectr conventions (see Spectr documentation)
 4. Ensure all requirements have at least one scenario with `#### Scenario:` format

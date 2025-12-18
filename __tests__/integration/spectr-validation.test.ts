@@ -42,23 +42,19 @@ async function runSpectrValidation(
   let stdout = "";
   let stderr = "";
 
-  const _exitCode = await exec(
-    "spectr",
-    ["validate", "--all", "--strict", "--json"],
-    {
-      cwd: fixturePath,
-      ignoreReturnCode: true,
-      listeners: {
-        stderr: (data: Buffer) => {
-          stderr += data.toString();
-        },
-        stdout: (data: Buffer) => {
-          stdout += data.toString();
-        },
+  const _exitCode = await exec("spectr", ["validate", "--all", "--json"], {
+    cwd: fixturePath,
+    ignoreReturnCode: true,
+    listeners: {
+      stderr: (data: Buffer) => {
+        stderr += data.toString();
       },
-      silent: true,
+      stdout: (data: Buffer) => {
+        stdout += data.toString();
+      },
     },
-  );
+    silent: true,
+  });
 
   // Extract JSON from output (stderr may contain error messages after JSON)
   const jsonMatch = stdout.match(/^\[[\s\S]*\]$/m);
@@ -83,23 +79,19 @@ async function runSpectrValidationExpectingFailure(
   let stdout = "";
   let stderr = "";
 
-  const exitCode = await exec(
-    "spectr",
-    ["validate", "--all", "--strict", "--json"],
-    {
-      cwd: fixturePath,
-      ignoreReturnCode: true,
-      listeners: {
-        stderr: (data: Buffer) => {
-          stderr += data.toString();
-        },
-        stdout: (data: Buffer) => {
-          stdout += data.toString();
-        },
+  const exitCode = await exec("spectr", ["validate", "--all", "--json"], {
+    cwd: fixturePath,
+    ignoreReturnCode: true,
+    listeners: {
+      stderr: (data: Buffer) => {
+        stderr += data.toString();
       },
-      silent: true,
+      stdout: (data: Buffer) => {
+        stdout += data.toString();
+      },
     },
-  );
+    silent: true,
+  });
 
   // For failures, JSON is in stdout but error message is in stderr
   const jsonMatch = stdout.match(/^\[[\s\S]*\]$/m);

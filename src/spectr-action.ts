@@ -21,9 +21,8 @@ async function run(): Promise<void> {
     // 1. Get inputs
     const version = core.getInput("version");
     const githubToken = core.getInput("github-token");
-    const strict = core.getBooleanInput("strict");
 
-    core.info(`Starting spectr validation (strict: ${strict})`);
+    core.info("Starting spectr validation");
 
     // 2. Setup platform and architecture
     const platform = getPlatform();
@@ -41,7 +40,7 @@ async function run(): Promise<void> {
     core.info(`Successfully installed spectr at ${spectrPath}`);
 
     // 4. Run spectr validation
-    const validationOutput = await runSpectrValidation(spectrPath, strict);
+    const validationOutput = await runSpectrValidation(spectrPath);
 
     // 5. Process results and create annotations
     const hasErrors = await processValidationResults(validationOutput);
@@ -121,7 +120,6 @@ async function setupSpectr(
  */
 async function runSpectrValidation(
   spectrPath: string,
-  strict: boolean,
 ): Promise<ValidationOutput> {
   const workspacePath = process.env.GITHUB_WORKSPACE;
   if (!workspacePath) {
@@ -130,9 +128,6 @@ async function runSpectrValidation(
 
   // Build command arguments
   const args = ["validate", "--all", "--json"];
-  if (strict) {
-    args.push("--strict");
-  }
 
   core.info(`Running: ${spectrPath} ${args.join(" ")}`);
   core.info(`Working directory: ${workspacePath}`);

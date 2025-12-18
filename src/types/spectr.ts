@@ -2,7 +2,7 @@
  * TypeScript type definitions for spectr validation output
  *
  * These types match the JSON output structure from:
- * `spectr validate --all --strict --json`
+ * `spectr validate --all --json`
  */
 
 /**
@@ -71,7 +71,7 @@ export interface BulkResult {
 
 /**
  * Array of validation results returned by bulk validation
- * Output from: `spectr validate --all --strict --json`
+ * Output from: `spectr validate --all --json`
  */
 export type ValidationOutput = BulkResult[];
 

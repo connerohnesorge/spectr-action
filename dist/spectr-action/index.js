@@ -29284,8 +29284,7 @@ async function run() {
         // 1. Get inputs
         const version = core.getInput("version");
         const githubToken = core.getInput("github-token");
-        const strict = core.getBooleanInput("strict");
-        core.info(`Starting spectr validation (strict: ${strict})`);
+        core.info("Starting spectr validation");
         // 2. Setup platform and architecture
         const platform = (0, platforms_1.getPlatform)();
         const arch = (0, platforms_1.getArch)();
@@ -29299,7 +29298,7 @@ async function run() {
         const spectrPath = await setupSpectr(platform, arch, version, githubToken);
         core.info(`Successfully installed spectr at ${spectrPath}`);
         // 4. Run spectr validation
-        const validationOutput = await runSpectrValidation(spectrPath, strict);
+        const validationOutput = await runSpectrValidation(spectrPath);
         // 5. Process results and create annotations
         const hasErrors = await processValidationResults(validationOutput);
         // 6. Run issue sync if enabled
@@ -29355,16 +29354,13 @@ async function setupSpectr(platform, arch, versionInput, githubToken) {
 /**
  * Run spectr validation and return parsed JSON output
  */
-async function runSpectrValidation(spectrPath, strict) {
+async function runSpectrValidation(spectrPath) {
     const workspacePath = process.env.GITHUB_WORKSPACE;
     if (!workspacePath) {
         throw new Error("GITHUB_WORKSPACE environment variable is not set");
     }
     // Build command arguments
     const args = ["validate", "--all", "--json"];
-    if (strict) {
-        args.push("--strict");
-    }
     core.info(`Running: ${spectrPath} ${args.join(" ")}`);
     core.info(`Working directory: ${workspacePath}`);
     // Capture stdout
@@ -29496,7 +29492,7 @@ run();
  * TypeScript type definitions for spectr validation output
  *
  * These types match the JSON output structure from:
- * `spectr validate --all --strict --json`
+ * `spectr validate --all --json`
  */
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.formatAllIssues = exports.formatIssue = exports.getResultsWithErrors = exports.getFailedResults = exports.allValid = exports.hasAnyErrors = exports.getTotalInfoCount = exports.getTotalWarningCount = exports.getTotalErrorCount = exports.getAllInfo = exports.getAllWarnings = exports.getAllErrors = exports.getTotalIssueCount = exports.hasError = exports.hasReport = exports.isValid = void 0;
